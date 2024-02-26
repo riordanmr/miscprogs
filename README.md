@@ -1,2 +1,2 @@
 # miscprogs
-Miscellaneous programs too small to have their own repository
+Miscellaneous programs too small to have their own repository.
