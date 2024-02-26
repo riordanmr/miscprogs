@@ -7,12 +7,16 @@
  *  routinely use tabs).
  *
  *  Written by Mark Riordan  on 6 June 1988.
- *  Modified by Mark Riodan  on 14 January 2011 to compress
+ *  Modified by Mark Riordan  on 14 January 2011 to compress
  *    spaces at BOL even after leading tabs.
+ *  Modified by Mark Riordan on 25 February 2024 to compile
+ *    on macOS clang 15.0.
  */
 
 #include "stdio.h"
 #include "ctype.h"
+#include <string.h>
+#include <stdlib.h>
 
 #define FALSE 0
 #define TRUE  1
