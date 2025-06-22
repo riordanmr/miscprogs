@@ -15,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -24,7 +25,7 @@ import (
 
 func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
 	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-	fmt.Printf("Go to the following link in your browser then type the authorization code: \n%v\n", authURL)
+	fmt.Printf("Go to the following link in your browser then type the authorization code embedded in the redirect: \n%v\n", authURL)
 	var authCode string
 	if _, err := fmt.Scan(&authCode); err != nil {
 		log.Fatalf("Unable to read authorization code: %v", err)
@@ -34,17 +35,6 @@ func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
 		log.Fatalf("Unable to retrieve token from web: %v", err)
 	}
 	return tok
-}
-
-// getClient handles the OAuth2 flow and token caching.
-func getClient(config *oauth2.Config) *http.Client {
-	const tokenFile = "token.json"
-	tok, err := tokenFromFile(tokenFile)
-	if err != nil {
-		tok = getTokenFromWeb(config)
-		saveToken(tokenFile, tok)
-	}
-	return config.Client(context.Background(), tok)
 }
 
 func tokenFromFile(file string) (*oauth2.Token, error) {
@@ -67,33 +57,44 @@ func saveToken(path string, token *oauth2.Token) {
 	json.NewEncoder(f).Encode(token)
 }
 
-func main() {
-	ctx := context.Background()
-
-	// Load credentials.json (OAuth2 client ID from Google Cloud Console)
-	b, err := ioutil.ReadFile("credentials.json")
+// getClient handles the OAuth2 flow and token caching.
+func getClient(config *oauth2.Config) *http.Client {
+	const tokenFile = "token.json"
+	tok, err := tokenFromFile(tokenFile)
 	if err != nil {
-		log.Fatalf("Unable to read client secret file: %v", err)
+		tok = getTokenFromWeb(config)
+		saveToken(tokenFile, tok)
 	}
-	//fmt.Println("Successfully read credentials.json")
+	return config.Client(context.Background(), tok)
+}
 
-	// If modifying these scopes, delete your previously saved token.json.
-	config, err := google.ConfigFromJSON(b, sheets.SpreadsheetsReadonlyScope)
-	if err != nil {
-		log.Fatalf("Unable to parse client secret file to config: %v", err)
+func printUsage() {
+	fmt.Println("Usage: gsheetfmt -action:{convert|invert}")
+}
+
+func parseCmdLine() (string, error) {
+	if len(os.Args) < 2 {
+		printUsage()
+		return "", fmt.Errorf("no action specified")
 	}
-	//fmt.Println("Successfully parsed client secret file to config")
-
-	// Set a specific redirect URL with a port if you want to avoid conflicts
-	config.RedirectURL = "http://localhost:8080"
-	client := getClient(config)
-
-	srv, err := sheets.NewService(ctx, option.WithHTTPClient(client))
-	if err != nil {
-		log.Fatalf("Unable to retrieve Sheets client: %v", err)
+	arg := os.Args[1]
+	if strings.HasPrefix(arg, "-action:") {
+		action := strings.TrimPrefix(arg, "-action:")
+		if action == "" {
+			printUsage()
+			return "", fmt.Errorf("no action specified after -action:")
+		}
+		if action != "convert" && action != "invert" {
+			printUsage()
+			return "", fmt.Errorf("invalid action specified: %s", action)
+		}
+		return action, nil
 	}
-	//fmt.Println("Successfully created Sheets service client")
+	printUsage()
+	return "", fmt.Errorf("invalid argument: %s", arg)
+}
 
+func convert(srv *sheets.Service) {
 	spreadsheetId := "1q147i9CqoCmdJu-KlRanC5tRcz4qG6MVCqGYdQ4ie8g"
 	readRange := "Sheet1!A2:D" // Adjust as needed
 	resp, err := srv.Spreadsheets.Values.Get(spreadsheetId, readRange).Do()
@@ -154,5 +155,126 @@ func main() {
 		// 	strrow += fmt.Sprintf("Column %d: %v", i, cell)
 		// }
 		// mt.Println(strrow)
+	}
+}
+
+// contains checks if a slice of strings contains a specific string.
+func contains(slice []string, str string) bool {
+	for _, v := range slice {
+		if v == str {
+			return true
+		}
+	}
+	return false
+}
+
+func invert(srv *sheets.Service) {
+	spreadsheetId := "1hHcEJM6sibaGwL7itIQAZVjma1_T2nJUQ-up5pXvrCU"
+	readRange := "Sheet1!A2:G"
+	resp, err := srv.Spreadsheets.Values.Get(spreadsheetId, readRange).Do()
+	if err != nil {
+		log.Fatalf("Unable to retrieve data from sheet: %v", err)
+	}
+	//fmt.Println("Successfully retrieved data from the spreadsheet")
+
+	fmt.Print("<table>\n")
+	if len(resp.Values) == 0 {
+		fmt.Println("No data found.")
+	} else {
+		// Gather unique destination room names
+		var destRooms []string
+		// Create map of room name to array of items
+		roomItems := make(map[string][]string)
+		for _, row := range resp.Values {
+			if len(row) > 0 {
+				houseFrom := row[0].(string)
+				roomFrom := row[1].(string)
+				if houseFrom == "Applewood" {
+					if !contains(destRooms, roomFrom) {
+						destRooms = append(destRooms, roomFrom)
+						roomItems[roomFrom] = []string{}
+					}
+				}
+			}
+		}
+		//fmt.Printf("Unique destination rooms: %v\n\n", destRooms)
+
+		// Iterate over the rows again to collect items for each destination room
+		for _, row := range resp.Values {
+			nColumns := len(row)
+			if nColumns >= 4 {
+				houseFrom := row[0].(string)
+				roomFrom := row[1].(string)
+				item := row[2].(string)
+				yesNo := row[3].(string)
+				if houseFrom == "Applewood" && yesNo == "y" {
+					if nColumns >= 6 {
+						roomTo := row[5].(string)
+						if roomTo == "same" {
+							roomTo = row[1].(string) // Use the original room if "same
+						} else {
+							item = fmt.Sprintf("%s (from %s %s)", item, houseFrom, roomFrom) // Append original house and room to item
+						}
+						roomItems[roomTo] = append(roomItems[roomTo], item)
+					} else {
+						fmt.Printf("Skipping row with insufficient columns: %v\n", row)
+					}
+				}
+			} else {
+				fmt.Printf("Skipping row with %d columns: %v\n", nColumns, row)
+			}
+		}
+		//fmt.Printf("Items in each room: %v\n", roomItems)
+		for _, room := range destRooms {
+			fmt.Printf("<tr><td colspan=\"2\"><b>%s</b></td></tr>\n", room)
+			items := roomItems[room]
+			for _, item := range items {
+				fmt.Printf("<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;</td><td>%s</td></tr>\n", item)
+			}
+		}
+		fmt.Printf("</table>\n")
+	}
+}
+
+func main() {
+	action, err := parseCmdLine()
+	if err != nil {
+		log.Fatalf("Error parsing command line: %v", err)
+	}
+	ctx := context.Background()
+
+	// Load credentials.json (OAuth2 client ID from Google Cloud Console)
+	b, err := ioutil.ReadFile("credentials.json")
+	if err != nil {
+		log.Fatalf("Unable to read client secret file: %v", err)
+	}
+	//fmt.Println("Successfully read credentials.json")
+
+	// If modifying these scopes, delete your previously saved token.json.
+	config, err := google.ConfigFromJSON(b, sheets.SpreadsheetsReadonlyScope)
+	if err != nil {
+		log.Fatalf("Unable to parse client secret file to config: %v", err)
+	}
+	//fmt.Println("Successfully parsed client secret file to config")
+
+	// Set a specific redirect URL with a port, but we don't actually have
+	// a web server running here; we just need to inspect the redirect URL
+	// for the authorization code.
+	config.RedirectURL = "http://localhost:8080"
+	client := getClient(config)
+
+	srv, err := sheets.NewService(ctx, option.WithHTTPClient(client))
+	if err != nil {
+		log.Fatalf("Unable to retrieve Sheets client: %v", err)
+	}
+	//fmt.Println("Successfully created Sheets service client")
+	if action == "convert" {
+		convert(srv)
+	} else if action == "invert" {
+		invert(srv)
+	} else {
+		fmt.Println("Unknown action specified.")
+		printUsage()
+		os.Exit(1)
 	}
 }
