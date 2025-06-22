@@ -119,7 +119,7 @@ func main() {
 				// Non-blank first column indicates a new room
 				if nItemsThisRoom > 0 {
 					// If we have items from the previous room, print them
-					fmt.Printf("<tr><td colspan=\"2\">%v</td></tr>\n", curRoomName)
+					fmt.Printf("<tr><td colspan=\"2\"><b>%v</b></td></tr>\n", curRoomName)
 					fmt.Printf("%s\n", curRoomHTML)
 				}
 				curRoomName = row[0].(string)
@@ -142,7 +142,7 @@ func main() {
 		}
 		if nItemsThisRoom > 0 {
 			// If we have items from the previous room, print them
-			fmt.Printf("<tr><td colspan=\"2\">%v</td></tr>\n", curRoomName)
+			fmt.Printf("<tr><td colspan=\"2\"><b>%v</b></td></tr>\n", curRoomName)
 			fmt.Printf("%s\n", curRoomHTML)
 		}
 		fmt.Print("</table>\n")
