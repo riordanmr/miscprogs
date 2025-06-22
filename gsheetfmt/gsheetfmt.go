@@ -222,7 +222,7 @@ func invert(srv *sheets.Service) {
 						}
 						if !contains(destRooms, roomTo) {
 							if len(roomTo) < 2 {
-								needToDecide = append(needToDecide, fmt.Sprintf("'%s' from %s %s", item, houseFrom, roomFrom))
+								needToDecide = append(needToDecide, item)
 							} else {
 								fmt.Fprintf(os.Stderr, "Error: Room '%s' not found in destination rooms: %v\n", roomTo, row)
 							}
