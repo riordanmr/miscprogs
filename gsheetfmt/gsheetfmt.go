@@ -208,6 +208,10 @@ func invert(srv *sheets.Service) {
 				roomFrom := row[1].(string)
 				item := row[2].(string)
 				yesNo := row[3].(string)
+				if 4 == nColumns {
+					needToDecide = append(needToDecide, fmt.Sprintf("'%s' from %s %s", item, houseFrom, roomFrom))
+					continue
+				}
 				if yesNo == "y" {
 					if nColumns >= 6 {
 						roomTo := row[5].(string)
@@ -217,12 +221,16 @@ func invert(srv *sheets.Service) {
 							item = fmt.Sprintf("%s (from %s %s)", item, houseFrom, roomFrom) // Append original house and room to item
 						}
 						if !contains(destRooms, roomTo) {
-							fmt.Fprintf(os.Stderr, "Error: Room '%s' not found in destination rooms: %v\n", roomTo, row)
+							if len(roomTo) < 2 {
+								needToDecide = append(needToDecide, fmt.Sprintf("'%s' from %s %s", item, houseFrom, roomFrom))
+							} else {
+								fmt.Fprintf(os.Stderr, "Error: Room '%s' not found in destination rooms: %v\n", roomTo, row)
+							}
 						}
 						//fmt.Fprintf(os.Stderr, "Adding item '%s' to room '%s'\n", item, roomTo)
 						roomItems[roomTo] = append(roomItems[roomTo], item)
 					} else {
-						fmt.Fprintf(os.Stderr, "Skipping row with insufficient columns: %v\n", row)
+						needToDecide = append(needToDecide, fmt.Sprintf("'%s' from %s %s", item, houseFrom, roomFrom))
 					}
 				} else if yesNo != "n" {
 					if len(item) > 0 {
@@ -244,7 +252,7 @@ func invert(srv *sheets.Service) {
 		}
 		fmt.Printf("</table>\n")
 
-		fmt.Println("<p>Items that need to be decided:</p>")
+		fmt.Println("<p><b>Items that need to be decided:</b></p>")
 		if len(needToDecide) > 0 {
 			fmt.Println("<ul>")
 			for _, item := range needToDecide {
