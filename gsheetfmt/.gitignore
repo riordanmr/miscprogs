@@ -1,0 +1,7 @@
+*.json
+*.html
+gsheetfmt
+j
+.DS_Store
+*.tsv
+
