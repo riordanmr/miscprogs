@@ -69,7 +69,7 @@ func getClient(config *oauth2.Config) *http.Client {
 }
 
 func printUsage() {
-	fmt.Println("Usage: gsheetfmt -action:{convert|invert}")
+	fmt.Println("Usage: gsheetfmt -action:{convertold|invert|convertnew}")
 }
 
 func parseCmdLine() (string, error) {
@@ -84,7 +84,7 @@ func parseCmdLine() (string, error) {
 			printUsage()
 			return "", fmt.Errorf("no action specified after -action:")
 		}
-		if action != "convert" && action != "invert" {
+		if action != "convertold" && action != "invert" && action != "convertnew" {
 			printUsage()
 			return "", fmt.Errorf("invalid action specified: %s", action)
 		}
@@ -94,7 +94,7 @@ func parseCmdLine() (string, error) {
 	return "", fmt.Errorf("invalid argument: %s", arg)
 }
 
-func convert(srv *sheets.Service) {
+func convertOld(srv *sheets.Service) {
 	spreadsheetId := "1q147i9CqoCmdJu-KlRanC5tRcz4qG6MVCqGYdQ4ie8g"
 	readRange := "Sheet1!A2:D" // Adjust as needed
 	resp, err := srv.Spreadsheets.Values.Get(spreadsheetId, readRange).Do()
@@ -155,6 +155,59 @@ func convert(srv *sheets.Service) {
 		// 	strrow += fmt.Sprintf("Column %d: %v", i, cell)
 		// }
 		// mt.Println(strrow)
+	}
+}
+
+// Given a Google Sheet describing items in all houses, output an HTML table
+// that lists each destination room and the items that should go there.
+// The purpose is the same as convertOld, but the input sheet has a different structure.
+func convertNew(srv *sheets.Service) {
+	spreadsheetId := "1hHcEJM6sibaGwL7itIQAZVjma1_T2nJUQ-up5pXvrCU"
+	readRange := "Sheet1!A2:G"
+	resp, err := srv.Spreadsheets.Values.Get(spreadsheetId, readRange).Do()
+	if err != nil {
+		log.Fatalf("Unable to retrieve data from sheet: %v", err)
+	}
+
+	fmt.Print("<table>\n")
+	if len(resp.Values) == 0 {
+		fmt.Fprintln(os.Stderr, "No data found.")
+	} else {
+		nItemsThisRoom := 0
+		curRoomHTML := ""
+		curRoomName := ""
+		for _, row := range resp.Values {
+			numCols := len(row)
+			if numCols == 0 {
+				fmt.Fprintf(os.Stderr, "Error: Empty row encountered\n")
+			} else {
+				newRoomName := row[1].(string)
+				if newRoomName != curRoomName {
+					if nItemsThisRoom > 0 {
+						// If we have items from the previous room, print them
+						fmt.Printf("<tr><td colspan=\"2\"><b>%v</b></td></tr>\n", curRoomName)
+						fmt.Printf("%s\n", curRoomHTML)
+					}
+					curRoomName = newRoomName
+					nItemsThisRoom = 0
+					curRoomHTML = ""
+				}
+
+				houseFrom := row[0].(string)
+				desc := row[2].(string)
+				yesNo := row[3].(string)
+				if yesNo == "y" && houseFrom == "Applewood" {
+					curRoomHTML += fmt.Sprintf("<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;</td><td>%s</td></tr>\n", desc)
+					nItemsThisRoom++
+				}
+			}
+		}
+		if nItemsThisRoom > 0 {
+			// If we have items from the previous room, print them
+			fmt.Printf("<tr><td colspan=\"2\"><b>%v</b></td></tr>\n", curRoomName)
+			fmt.Printf("%s\n", curRoomHTML)
+		}
+		fmt.Print("</table>\n")
 	}
 }
 
@@ -297,10 +350,12 @@ func main() {
 		log.Fatalf("Unable to retrieve Sheets client: %v", err)
 	}
 	//fmt.Println("Successfully created Sheets service client")
-	if action == "convert" {
-		convert(srv)
+	if action == "convertold" {
+		convertOld(srv)
 	} else if action == "invert" {
 		invert(srv)
+	} else if action == "convertnew" {
+		convertNew(srv)
 	} else {
 		fmt.Println("Unknown action specified.")
 		printUsage()
