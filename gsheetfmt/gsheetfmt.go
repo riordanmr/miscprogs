@@ -25,7 +25,7 @@ import (
 
 func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
 	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-	fmt.Printf("Go to the following link in your browser then type the authorization code embedded in the redirect: \n%v\n", authURL)
+	fmt.Fprintf(os.Stderr, "Go to the following link in your browser then type the authorization code embedded in the redirect: \n%v\n", authURL)
 	var authCode string
 	if _, err := fmt.Scan(&authCode); err != nil {
 		log.Fatalf("Unable to read authorization code: %v", err)
@@ -105,7 +105,7 @@ func convert(srv *sheets.Service) {
 
 	fmt.Print("<table>\n")
 	if len(resp.Values) == 0 {
-		fmt.Println("No data found.")
+		fmt.Fprintln(os.Stderr, "No data found.")
 	} else {
 		nItemsThisRoom := 0
 		curRoomHTML := ""
@@ -183,6 +183,7 @@ func invert(srv *sheets.Service) {
 	} else {
 		// Gather unique destination room names
 		var destRooms []string
+		var needToDecide []string
 		// Create map of room name to array of items
 		roomItems := make(map[string][]string)
 		for _, row := range resp.Values {
@@ -207,24 +208,33 @@ func invert(srv *sheets.Service) {
 				roomFrom := row[1].(string)
 				item := row[2].(string)
 				yesNo := row[3].(string)
-				if houseFrom == "Applewood" && yesNo == "y" {
+				if yesNo == "y" {
 					if nColumns >= 6 {
 						roomTo := row[5].(string)
 						if roomTo == "same" {
-							roomTo = row[1].(string) // Use the original room if "same
+							roomTo = row[1].(string) // Use the original room if "same"
 						} else {
 							item = fmt.Sprintf("%s (from %s %s)", item, houseFrom, roomFrom) // Append original house and room to item
 						}
+						if !contains(destRooms, roomTo) {
+							fmt.Fprintf(os.Stderr, "Error: Room '%s' not found in destination rooms: %v\n", roomTo, row)
+						}
+						//fmt.Fprintf(os.Stderr, "Adding item '%s' to room '%s'\n", item, roomTo)
 						roomItems[roomTo] = append(roomItems[roomTo], item)
 					} else {
-						fmt.Printf("Skipping row with insufficient columns: %v\n", row)
+						fmt.Fprintf(os.Stderr, "Skipping row with insufficient columns: %v\n", row)
+					}
+				} else if yesNo != "n" {
+					if len(item) > 0 {
+						needToDecide = append(needToDecide, fmt.Sprintf("'%s' from %s %s", item, houseFrom, roomFrom))
 					}
 				}
 			} else {
-				fmt.Printf("Skipping row with %d columns: %v\n", nColumns, row)
+				fmt.Fprintf(os.Stderr, "Skipping row with %d columns: %v\n", nColumns, row)
 			}
 		}
-		//fmt.Printf("Items in each room: %v\n", roomItems)
+
+		// Print an HTML table with destination rooms and their items
 		for _, room := range destRooms {
 			fmt.Printf("<tr><td colspan=\"2\"><b>%s</b></td></tr>\n", room)
 			items := roomItems[room]
@@ -233,6 +243,17 @@ func invert(srv *sheets.Service) {
 			}
 		}
 		fmt.Printf("</table>\n")
+
+		fmt.Println("<p>Items that need to be decided:</p>")
+		if len(needToDecide) > 0 {
+			fmt.Println("<ul>")
+			for _, item := range needToDecide {
+				fmt.Printf("<li>%s</li>\n", item)
+			}
+			fmt.Println("</ul>")
+		} else {
+			fmt.Println("None")
+		}
 	}
 }
 
