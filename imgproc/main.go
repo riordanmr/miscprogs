@@ -23,6 +23,7 @@ func main() {
 	// Define command line flags
 	action := flag.String("a", "", "Action to perform (e.g., renamesize)")
 	inputFile := flag.String("i", "", "Input image filename")
+	testMode := flag.Bool("t", false, "Test mode - don't actually rename files")
 	flag.Parse()
 
 	// Validate inputs
@@ -38,14 +39,14 @@ func main() {
 	// Handle different actions
 	switch *action {
 	case "renamesize":
-		handleRenameSize(*inputFile)
+		handleRenameSize(*inputFile, *testMode)
 	default:
 		fmt.Fprintf(os.Stderr, "Error: unknown action '%s'\n", *action)
 		os.Exit(1)
 	}
 }
 
-func handleRenameSize(filename string) {
+func handleRenameSize(filename string, testMode bool) {
 	// Open the image file
 	file, err := os.Open(filename)
 	if err != nil {
@@ -66,11 +67,6 @@ func handleRenameSize(filename string) {
 	x := config.Width
 	y := config.Height
 
-	// Compute GCD and simplify dimensions
-	gcd := gcd(x, y)
-	leastx := x / gcd
-	leasty := y / gcd
-
 	// Define acceptable aspect ratios
 	acceptableRatios := [][2]int{
 		{21, 9}, {16, 9}, {5, 4}, {4, 3}, {3, 2}, {1, 1},
@@ -81,9 +77,11 @@ func handleRenameSize(filename string) {
 	actualRatio := float64(x) / float64(y)
 	closestRatio := acceptableRatios[0]
 	minDiff := abs(actualRatio - float64(closestRatio[0])/float64(closestRatio[1]))
+	fmt.Printf("Actual image ratio: %f\n", actualRatio)
 
 	for _, ratio := range acceptableRatios[1:] {
 		ratioValue := float64(ratio[0]) / float64(ratio[1])
+		fmt.Printf("Checking ratio: %d:%d (%f)\n", ratio[0], ratio[1], ratioValue)
 		diff := abs(actualRatio - ratioValue)
 		if diff < minDiff {
 			minDiff = diff
@@ -93,29 +91,23 @@ func handleRenameSize(filename string) {
 
 	// Display results
 	fmt.Printf("Image dimensions: %d x %d\n", x, y)
-	fmt.Printf("Simplified ratio: %d x %d\n", leastx, leasty)
 	fmt.Printf("Closest standard ratio: %d:%d\n", closestRatio[0], closestRatio[1])
 
 	// Compute new filename
 	newFilename := computeNewFilename(filename, closestRatio[0], closestRatio[1])
 
-	// Rename the file
-	err = os.Rename(filename, newFilename)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error renaming file: %v\n", err)
-		os.Exit(1)
+	if testMode {
+		fmt.Printf("Test mode: Would rename to: %s\n", newFilename)
+	} else {
+		// Rename the file
+		err = os.Rename(filename, newFilename)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error renaming file: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("File renamed to: %s\n", newFilename)
 	}
 
-	fmt.Printf("File renamed to: %s\n", newFilename)
-
-}
-
-// gcd computes the greatest common divisor using Euclidean algorithm
-func gcd(a, b int) int {
-	for b != 0 {
-		a, b = b, a%b
-	}
-	return a
 }
 
 // abs returns the absolute value of a float64
