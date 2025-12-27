@@ -19,6 +19,13 @@ import (
 	"strings"
 )
 
+func usage() {
+	fmt.Fprintf(os.Stderr, "Usage: imgproc -a action -i inputfilename [-t]\n")
+	fmt.Fprintf(os.Stderr, "  -a action: Action to perform (e.g., renamesize)\n")
+	fmt.Fprintf(os.Stderr, "  -i inputfilename: Input image filename\n")
+	fmt.Fprintf(os.Stderr, "  -t: Test mode - don't actually rename files\n")
+}
+
 func main() {
 	// Define command line flags
 	action := flag.String("a", "", "Action to perform (e.g., renamesize)")
@@ -29,9 +36,11 @@ func main() {
 	// Validate inputs
 	if *action == "" {
 		fmt.Fprintln(os.Stderr, "Error: -a action parameter is required")
+		usage()
 		os.Exit(1)
 	}
 	if *inputFile == "" {
+		usage()
 		fmt.Fprintln(os.Stderr, "Error: -i inputfilename parameter is required")
 		os.Exit(1)
 	}
