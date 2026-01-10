@@ -90,7 +90,7 @@ func handleRenameSize(filename string, testMode bool) {
 
 	for _, ratio := range acceptableRatios[1:] {
 		ratioValue := float64(ratio[0]) / float64(ratio[1])
-		fmt.Printf("Checking ratio: %d:%d (%f)\n", ratio[0], ratio[1], ratioValue)
+		//fmt.Printf("Checking ratio: %d:%d (%f)\n", ratio[0], ratio[1], ratioValue)
 		diff := abs(actualRatio - ratioValue)
 		if diff < minDiff {
 			minDiff = diff
